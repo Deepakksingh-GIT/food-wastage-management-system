@@ -3,6 +3,7 @@ import pandas as pd
 import mysql.connector
 import datetime
 
+
 # DATABASE C0nfiguration
 DB_HOST = "localhost"
 DB_USER = "root"
@@ -69,85 +70,66 @@ elif choice == "View Table":
 # CRUD Creation
 elif choice == "CRUD Operation":
     st.title("CRUD Operations")
+    
+    # Select table
     crud_table = st.selectbox("Select Table", ["Providers", "Receivers", "Food Listings", "Claims"])
+    
+    # Add CRUD navigation inside
+    crud_action = st.radio("Select Action", ["Add", "Update", "Delete"])
+    
     cursor = conn.cursor()
 
-    #providers
-    if crud_table == "Providers":
-        st.subheader("Add New Provider")
-        name = st.text_input("Name")
-        type_ = st.text_input("Type")
-        address = st.text_input("Address")
-        city = st.text_input("City")
-        contact = st.text_input("Contact")
-        if st.button("Add Provider"):
-            try:
-                cursor.execute("""
-                    INSERT INTO providers (Name, Type, Address, City, Contact)
-                    VALUES (%s,%s,%s,%s,%s)
-                """, (name, type_, address, city, contact))
-                conn.commit()
-                st.success("Provider added successfully!")
-            except Exception as e:
-                st.error(f"Error: {e}")
+    # Add
+    if crud_action == "Add":
+        st.write(f"**Add new record in {crud_table}**")
+        # Your existing Add code goes here
 
-    # receivers 
-    elif crud_table == "Receivers":
-        st.subheader("Add New Receiver")
-        name = st.text_input("Name")
-        type_ = st.text_input("Type")
-        city = st.text_input("City")
-        contact = st.text_input("Contact")
-        if st.button("Add Receiver"):
-            try:
-                cursor.execute("""
-                    INSERT INTO receivers (Name, Type, City, Contact)
-                    VALUES (%s,%s,%s,%s)
-                """, (name, type_, city, contact))
-                conn.commit()
-                st.success("Receiver added successfully!")
-            except Exception as e:
-                st.error(f"Error: {e}")
+    # Update
+    elif crud_action == "Update":
+        st.write(f"**Update record in {crud_table}**")
+        record_id = st.number_input(f"Enter {crud_table[:-1]} ID to Update", min_value=1)
 
-    # FOOD Listings
-    elif crud_table == "Food Listings":
-        st.subheader("Add New Food Listing")
-        food_name = st.text_input("Food Name")
-        quantity = st.number_input("Quantity", min_value=1)
-        expiry = st.date_input("Expiry Date")
-        provider_id = st.number_input("Provider ID", min_value=1)
-        provider_type = st.text_input("Provider Type")
-        location = st.text_input("Location")
-        food_type = st.text_input("Food Type")
-        meal_type = st.text_input("Meal Type")
-        if st.button("Add Food Listing"):
-            try:
-                cursor.execute("""
-                    INSERT INTO food_listings 
-                    (Food_Name, Quantity, Expiry_Date, Provider_ID, Provider_Type, Location, Food_Type, Meal_Type)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-                """, (food_name, quantity, expiry, provider_id, provider_type, location, food_type, meal_type))
-                conn.commit()
-                st.success("Food Listing added successfully!")
-            except Exception as e:
-                st.error(f"Error: {e}")
+        # Define valid columns for each table
+        table_columns = {
+            "Providers": ["Name", "Type", "Address", "City", "Contact"],
+            "Receivers": ["Name", "Type", "City", "Contact"],
+            "Food Listings": ["Food_Name", "Quantity", "Expiry_Date", "Provider_ID", "Provider_Type", "Location", "Food_Type", "Meal_Type"],
+            "Claims": ["Food_ID", "Receiver_ID", "Status", "Timestamp"]
+        }
 
-    #  Claims
-    elif crud_table == "Claims":
-        st.subheader("Add New Claim")
-        food_id = st.number_input("Food ID", min_value=1)
-        receiver_id = st.number_input("Receiver ID", min_value=1)
-        status = st.selectbox("Status", ["Pending", "Approved", "Successful", "Canceled"])
-        date_val = st.date_input("Date", datetime.date.today())
-        timestamp = datetime.datetime.combine(date_val, datetime.datetime.now().time())
-        if st.button("Add Claim"):
+        column_to_update = st.selectbox("Column to Update", table_columns[crud_table])
+        new_value = st.text_input("New Value")
+
+        if st.button("Update Record"):
+            if new_value.strip() == "":
+                st.error("Please enter a valid new value.")
+            else:
+                # Convert numeric columns to int
+                if column_to_update in ["Quantity", "Provider_ID", "Receiver_ID", "Food_ID"]:
+                    try:
+                        new_value = int(new_value)
+                    except:
+                        st.error("Please enter a numeric value for this column.")
+                        cursor.close()
+                        st.stop()
+
+                try:
+                    query = f"UPDATE {crud_table.lower()} SET {column_to_update} = %s WHERE {crud_table[:-1]}_ID = %s"
+                    cursor.execute(query, (new_value, record_id))
+                    conn.commit()
+                    st.success(f"{crud_table[:-1]} record updated successfully!")
+                except Exception as e:
+                    st.error(f"Error: {e}")
+
+    # Delete
+    elif crud_action == "Delete":
+        st.write(f"**Delete record from {crud_table}**")
+        record_id = st.number_input(f"Enter {crud_table[:-1]} ID to Delete", min_value=1)
+        if st.button("Delete Record"):
             try:
-                cursor.execute("""
-                    INSERT INTO claims (Food_ID, Receiver_ID, Status, Timestamp)
-                    VALUES (%s,%s,%s,%s)
-                """, (food_id, receiver_id, status, timestamp))
+                cursor.execute(f"DELETE FROM {crud_table.lower()} WHERE {crud_table[:-1]}_ID = %s", (record_id,))
                 conn.commit()
-                st.success("Claim added successfully!")
+                st.success("Record deleted successfully!")
             except Exception as e:
                 st.error(f"Error: {e}")
 
@@ -340,12 +322,15 @@ elif choice == "SQL Queries & Visualization":
                 string_cols = df.select_dtypes(include='object').columns
 
                 if len(numeric_cols) > 0:
-                    if len(string_cols) > 0:
-                        st.bar_chart(df.set_index(string_cols[0])[numeric_cols])
-                    else:
-                        st.bar_chart(df[numeric_cols])
-        except Exception as e:
-            st.error(f"Error: {e}")
+                    x_col = string_cols[0]  # use first string column as x-axis
+                    chart_data = df.groupby(x_col)[numeric_cols].sum()  # aggregate numeric columns
+                    st.bar_chart(chart_data)
+                    
+                else:
+                        st.bar_chart(df[numeric_cols])   
+                      
+        except:
+                t.info("No numeric data to visualize.")
 
 #Introduction
 elif choice == "User Introduction":
